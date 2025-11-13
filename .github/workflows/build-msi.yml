@@ -157,9 +157,10 @@ jobs:
             $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
             # Ensure it matches X.Y.Z.W format
             $parts = $version -split '\.'
-            if ($parts.Count -lt 4) {
-              $version = "$version.0" * (4 - $parts.Count) -replace '\s+', ''
+            while ($parts.Count -lt 4) {
+              $parts += "0"
             }
+            $version = $parts -join '.'
           }
 
           # Default version
@@ -340,6 +341,29 @@ jobs:
         run: |
           $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
           echo "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Delete existing release if present
+        shell: powershell
+        continue-on-error: true
+        run: |
+          $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
+          Write-Host "Checking for existing release with tag: $tag" -ForegroundColor Cyan
+
+          try {
+            # Check if release with this specific tag exists
+            $release = gh release view $tag 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Found existing release for tag $tag, deleting..." -ForegroundColor Yellow
+              gh release delete $tag --yes
+              Write-Host "Deleted existing release for tag $tag" -ForegroundColor Green
+            } else {
+              Write-Host "No existing release found for tag $tag" -ForegroundColor Gray
+            }
+          } catch {
+            Write-Host "No existing release to delete for tag $tag" -ForegroundColor Gray
+          }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
