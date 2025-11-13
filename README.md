@@ -66,7 +66,7 @@ Professional Windows installer for OpenAI's Whisper speech recognition API. Runs
 
 ### Quick Install (Recommended)
 
-1. **Download** the MSI installer: `Whisper-API-1.0.0.0.msi`
+1. **Download** the latest MSI installer from [GitHub Releases](https://github.com/dniasoff/whisper-api/releases)
 2. **Double-click** the MSI file
 3. **Follow** the installation wizard
 4. **Run** the installer from Start Menu: `Start > Whisper API > Install Whisper API`
