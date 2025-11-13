@@ -18,10 +18,16 @@
 param(
     [string]$OutputDir = ".",
     [string]$Version = "1.0.0.0",
+    [string]$DisplayVersion = "",
     [string]$WixPath = $null
 )
 
 $ErrorActionPreference = "Stop"
+
+# If DisplayVersion not provided, use Version
+if ([string]::IsNullOrWhiteSpace($DisplayVersion)) {
+    $DisplayVersion = $Version
+}
 
 # ============================================================================
 # Utility Functions
@@ -114,7 +120,7 @@ function Build-Msi {
     $scriptDir = $PSScriptRoot
     $wxsFile = Join-Path $scriptDir "Product.wxs"
     $wixobjDir = Join-Path $scriptDir "obj"
-    $msiFileName = "Whisper-API-$Version.msi"
+    $msiFileName = "Whisper-API-$DisplayVersion.msi"
     $msiOutput = Join-Path $OutputDir $msiFileName
 
     # Convert to absolute paths
@@ -234,7 +240,7 @@ function Start-Build {
         Write-Host "Configuration:" -ForegroundColor Cyan
         Write-Host "  Output Directory: $OutputDir" -ForegroundColor Cyan
         Write-Host "  Version:          $Version" -ForegroundColor Cyan
-        Write-Host "  MSI Filename:     Whisper-API-$Version.msi" -ForegroundColor Cyan
+        Write-Host "  MSI Filename:     Whisper-API-$DisplayVersion.msi" -ForegroundColor Cyan
         Write-Host ""
 
         # Find WiX if not specified
@@ -259,7 +265,7 @@ function Start-Build {
             Write-Host ""
             Write-Host "Next Steps:" -ForegroundColor Green
             Write-Host "  - Test the MSI on a clean Windows machine" -ForegroundColor Green
-            Write-Host "  - Share Whisper-API-$Version.msi with end users" -ForegroundColor Green
+            Write-Host "  - Share Whisper-API-$DisplayVersion.msi with end users" -ForegroundColor Green
             Write-Host ""
             Write-Host "Requirements for Installation:" -ForegroundColor Green
             Write-Host "  - Windows 10 Build 14393 or later" -ForegroundColor Green

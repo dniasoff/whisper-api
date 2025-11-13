@@ -150,33 +150,38 @@ jobs:
         id: set-version
         shell: powershell
         run: |
-          $version = "${{ github.event.inputs.version }}"
+          $displayVersion = "${{ github.event.inputs.version }}"
 
           # If triggered by tag push
           if ($env:GITHUB_REF -like 'refs/tags/v*') {
-            $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
-            # Ensure it matches X.Y.Z.W format
-            $parts = $version -split '\.'
-            while ($parts.Count -lt 4) {
-              $parts += "0"
-            }
-            $version = $parts -join '.'
+            $displayVersion = $env:GITHUB_REF -replace 'refs/tags/v', ''
           }
 
           # Default version
-          if ([string]::IsNullOrWhiteSpace($version)) {
-            $version = "1.0.0.0"
+          if ([string]::IsNullOrWhiteSpace($displayVersion)) {
+            $displayVersion = "1.0.0"
           }
 
-          # Validate version format (X.Y.Z.W)
-          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
-            Write-Host "WARNING: Version '$version' doesn't match X.Y.Z.W format, using 1.0.0.0" -ForegroundColor Yellow
-            $version = "1.0.0.0"
+          # Create MSI version (4 parts) from display version (3 parts)
+          $parts = $displayVersion -split '\.'
+          while ($parts.Count -lt 4) {
+            $parts += "0"
+          }
+          $msiVersion = $parts -join '.'
+
+          # Validate MSI version format (X.Y.Z.W)
+          if ($msiVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            Write-Host "WARNING: Version '$msiVersion' doesn't match X.Y.Z.W format, using 1.0.0.0" -ForegroundColor Yellow
+            $msiVersion = "1.0.0.0"
+            $displayVersion = "1.0.0"
           }
 
-          Write-Host "MSI Version: $version" -ForegroundColor Cyan
-          echo "MSI_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          echo "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Display Version (filename): $displayVersion" -ForegroundColor Cyan
+          Write-Host "MSI Version (internal): $msiVersion" -ForegroundColor Cyan
+
+          echo "DISPLAY_VERSION=$displayVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "MSI_VERSION=$msiVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "version=$displayVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Download and install WiX Toolset
         shell: powershell
@@ -210,10 +215,10 @@ jobs:
         shell: powershell
         run: |
           cd wix
-          Write-Host "Building MSI version ${{ env.MSI_VERSION }}..." -ForegroundColor Cyan
+          Write-Host "Building MSI version ${{ env.MSI_VERSION }} (filename: ${{ env.DISPLAY_VERSION }})..." -ForegroundColor Cyan
 
           # Run build script
-          .\build-msi.ps1 -OutputDir "..\dist" -Version "${{ env.MSI_VERSION }}" -WixPath "${{ env.WIX_PATH }}"
+          .\build-msi.ps1 -OutputDir "..\dist" -Version "${{ env.MSI_VERSION }}" -DisplayVersion "${{ env.DISPLAY_VERSION }}" -WixPath "${{ env.WIX_PATH }}"
 
           if ($LASTEXITCODE -ne 0) {
             Write-Host "MSI build failed!" -ForegroundColor Red
@@ -223,7 +228,7 @@ jobs:
       - name: Verify MSI creation
         shell: powershell
         run: |
-          $msiPath = "dist\Whisper-API-${{ env.MSI_VERSION }}.msi"
+          $msiPath = "dist\Whisper-API-${{ env.DISPLAY_VERSION }}.msi"
 
           if (Test-Path $msiPath) {
             $fileSize = (Get-Item $msiPath).Length / 1MB
@@ -245,8 +250,8 @@ jobs:
       - name: Upload MSI as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Whisper-API-${{ env.MSI_VERSION }}-MSI
-          path: dist/Whisper-API-${{ env.MSI_VERSION }}.msi
+          name: Whisper-API-${{ env.DISPLAY_VERSION }}-MSI
+          path: dist/Whisper-API-${{ env.DISPLAY_VERSION }}.msi
           retention-days: 30
           if-no-files-found: error
 
@@ -254,11 +259,11 @@ jobs:
         shell: powershell
         run: |
           $releaseNotes = @"
-          # Whisper API v${{ env.MSI_VERSION }}
+          # Whisper API v${{ env.DISPLAY_VERSION }}
 
           ## Installation
 
-          1. Download **Whisper-API-${{ env.MSI_VERSION }}.msi**
+          1. Download **Whisper-API-${{ env.DISPLAY_VERSION }}.msi**
           2. Double-click to install
           3. Follow the installation wizard
           4. Click "Install Whisper API" from Start Menu
@@ -266,7 +271,7 @@ jobs:
 
           ## File Information
 
-          - **Filename**: Whisper-API-${{ env.MSI_VERSION }}.msi
+          - **Filename**: Whisper-API-${{ env.DISPLAY_VERSION }}.msi
           - **Size**: ${{ env.MSI_SIZE }} MB
           - **SHA256**: ${{ env.MSI_HASH }}
 
