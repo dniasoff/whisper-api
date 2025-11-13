@@ -342,6 +342,11 @@ jobs:
           $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
           echo "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
+      - name: Setup GitHub CLI
+        run: |
+          # GitHub CLI is pre-installed on GitHub runners
+          gh --version
+
       - name: Delete existing release if present
         shell: powershell
         continue-on-error: true
@@ -349,18 +354,25 @@ jobs:
           $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
           Write-Host "Checking for existing release with tag: $tag" -ForegroundColor Cyan
 
-          try {
-            # Check if release with this specific tag exists
-            $release = gh release view $tag 2>&1
+          # List all releases to debug
+          Write-Host "All releases:" -ForegroundColor Yellow
+          gh release list | Out-String | Write-Host
+
+          # Try to view the specific release
+          $viewOutput = gh release view $tag 2>&1
+          Write-Host "View output: $viewOutput" -ForegroundColor Gray
+
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Found existing release for tag $tag, deleting..." -ForegroundColor Yellow
+            gh release delete $tag --yes 2>&1 | Out-String | Write-Host
             if ($LASTEXITCODE -eq 0) {
-              Write-Host "Found existing release for tag $tag, deleting..." -ForegroundColor Yellow
-              gh release delete $tag --yes
-              Write-Host "Deleted existing release for tag $tag" -ForegroundColor Green
+              Write-Host "Successfully deleted existing release for tag $tag" -ForegroundColor Green
+              Start-Sleep -Seconds 2
             } else {
-              Write-Host "No existing release found for tag $tag" -ForegroundColor Gray
+              Write-Host "Failed to delete release" -ForegroundColor Red
             }
-          } catch {
-            Write-Host "No existing release to delete for tag $tag" -ForegroundColor Gray
+          } else {
+            Write-Host "No existing release found for tag $tag" -ForegroundColor Gray
           }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
