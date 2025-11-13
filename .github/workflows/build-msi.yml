@@ -1,0 +1,419 @@
+name: Build and Publish MSI Installer
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+    paths:
+      - 'install-whisper.ps1'
+      - 'uninstall-whisper.ps1'
+      - 'server.py'
+      - 'whisper_service.py'
+      - 'utils/**'
+      - 'config/**'
+      - 'wix/**'
+      - '.github/workflows/build-msi.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'install-whisper.ps1'
+      - 'uninstall-whisper.ps1'
+      - 'server.py'
+      - 'whisper_service.py'
+      - 'utils/**'
+      - 'config/**'
+      - 'wix/**'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'MSI Version (e.g., 1.0.0.0)'
+        required: false
+        default: '1.0.0.0'
+
+env:
+  MSIX_VERSION: '1.0.0.0'
+
+jobs:
+  # ============================================================================
+  # Validate PowerShell Scripts
+  # ============================================================================
+  validate-scripts:
+    name: Validate PowerShell Scripts
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set PowerShell execution policy
+        shell: powershell
+        run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+
+      - name: Validate install-whisper.ps1
+        shell: powershell
+        run: |
+          Write-Host "Validating install-whisper.ps1..." -ForegroundColor Cyan
+          Test-Path install-whisper.ps1 -PathType Leaf
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path install-whisper.ps1),
+            [ref]$null,
+            [ref]$null
+          )
+          if ($ast.EndBlock.Statements.Count -eq 0) {
+            Write-Host "ERROR: install-whisper.ps1 is empty!" -ForegroundColor Red
+            exit 1
+          }
+          Write-Host "[OK] install-whisper.ps1 is valid" -ForegroundColor Green
+
+      - name: Validate uninstall-whisper.ps1
+        shell: powershell
+        run: |
+          Write-Host "Validating uninstall-whisper.ps1..." -ForegroundColor Cyan
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path uninstall-whisper.ps1),
+            [ref]$null,
+            [ref]$null
+          )
+          Write-Host "[OK] uninstall-whisper.ps1 is valid" -ForegroundColor Green
+
+      - name: Validate utils scripts
+        shell: powershell
+        run: |
+          Write-Host "Validating utility scripts..." -ForegroundColor Cyan
+          $scripts = @(
+            'utils/check-gpu.ps1',
+            'utils/manage-service.ps1'
+          )
+          foreach ($script in $scripts) {
+            if (-not (Test-Path $script)) {
+              Write-Host "ERROR: $script not found!" -ForegroundColor Red
+              exit 1
+            }
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script),
+              [ref]$null,
+              [ref]$null
+            )
+            Write-Host "[OK] $script is valid" -ForegroundColor Green
+          }
+
+      - name: Check required files
+        shell: powershell
+        run: |
+          Write-Host "Checking required files..." -ForegroundColor Cyan
+          $requiredFiles = @(
+            'install-whisper.ps1',
+            'uninstall-whisper.ps1',
+            'server.py',
+            'whisper_service.py',
+            'README.md',
+            'QUICKSTART.md',
+            'config/requirements.txt',
+            'config/service-config.json',
+            'wix/Product.wxs',
+            'wix/build-msi.ps1',
+            'wix/License.rtf'
+          )
+
+          foreach ($file in $requiredFiles) {
+            if (Test-Path $file) {
+              Write-Host "[OK] $file" -ForegroundColor Green
+            } else {
+              Write-Host "[MISSING] $file" -ForegroundColor Red
+              exit 1
+            }
+          }
+
+  # ============================================================================
+  # Build MSI Installer
+  # ============================================================================
+  build-msi:
+    name: Build MSI Installer
+    runs-on: windows-latest
+    needs: validate-scripts
+    outputs:
+      msi_version: ${{ steps.set-version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set PowerShell execution policy
+        shell: powershell
+        run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+
+      - name: Detect version from tag or input
+        id: set-version
+        shell: powershell
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+
+          # If triggered by tag push
+          if ($env:GITHUB_REF -like 'refs/tags/v*') {
+            $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
+            # Ensure it matches X.Y.Z.W format
+            $parts = $version -split '\.'
+            if ($parts.Count -lt 4) {
+              $version = "$version.0" * (4 - $parts.Count) -replace '\s+', ''
+            }
+          }
+
+          # Default version
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            $version = "1.0.0.0"
+          }
+
+          # Validate version format (X.Y.Z.W)
+          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            Write-Host "WARNING: Version '$version' doesn't match X.Y.Z.W format, using 1.0.0.0" -ForegroundColor Yellow
+            $version = "1.0.0.0"
+          }
+
+          Write-Host "MSI Version: $version" -ForegroundColor Cyan
+          echo "MSI_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Download and install WiX Toolset
+        shell: powershell
+        run: |
+          Write-Host "Installing WiX Toolset 3.14..." -ForegroundColor Cyan
+
+          # Download WiX
+          $wixUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314.exe"
+          $wixInstaller = "$env:TEMP\wix314.exe"
+
+          Write-Host "Downloading from $wixUrl..." -ForegroundColor Cyan
+          Invoke-WebRequest -Uri $wixUrl -OutFile $wixInstaller -ErrorAction Stop
+
+          Write-Host "Installing WiX..." -ForegroundColor Cyan
+          & $wixInstaller /install /quiet /norestart | Out-Null
+
+          # Wait for installation
+          Start-Sleep -Seconds 5
+
+          # Verify installation
+          $wixPath = "C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe"
+          if (Test-Path $wixPath) {
+            Write-Host "[OK] WiX Toolset installed successfully" -ForegroundColor Green
+            echo "WIX_PATH=C:\Program Files (x86)\WiX Toolset v3.14" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } else {
+            Write-Host "[ERROR] WiX installation failed!" -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Build MSI
+        shell: powershell
+        run: |
+          cd wix
+          Write-Host "Building MSI version ${{ env.MSI_VERSION }}..." -ForegroundColor Cyan
+
+          # Run build script
+          .\build-msi.ps1 -OutputDir "..\dist" -Version "${{ env.MSI_VERSION }}" -WixPath "${{ env.WIX_PATH }}"
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "MSI build failed!" -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Verify MSI creation
+        shell: powershell
+        run: |
+          $msiPath = "dist\Whisper-API-${{ env.MSI_VERSION }}.msi"
+
+          if (Test-Path $msiPath) {
+            $fileSize = (Get-Item $msiPath).Length / 1MB
+            $fileHash = (Get-FileHash -Path $msiPath -Algorithm SHA256).Hash
+
+            Write-Host "[OK] MSI created successfully!" -ForegroundColor Green
+            Write-Host "  File: $msiPath" -ForegroundColor Green
+            Write-Host "  Size: $($fileSize.ToString('F2')) MB" -ForegroundColor Green
+            Write-Host "  SHA256: $fileHash" -ForegroundColor Green
+
+            # Save hash for later use
+            echo "MSI_HASH=$fileHash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            echo "MSI_SIZE=$($fileSize.ToString('F2'))" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } else {
+            Write-Host "[ERROR] MSI file not found at $msiPath!" -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Upload MSI as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Whisper-API-${{ env.MSI_VERSION }}-MSI
+          path: dist/Whisper-API-${{ env.MSI_VERSION }}.msi
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Create release notes
+        shell: powershell
+        run: |
+          $releaseNotes = @"
+          # Whisper API v${{ env.MSI_VERSION }}
+
+          ## Installation
+
+          1. Download **Whisper-API-${{ env.MSI_VERSION }}.msi**
+          2. Double-click to install
+          3. Follow the installation wizard
+          4. Click "Install Whisper API" from Start Menu
+          5. Select model, port, and CUDA preference
+
+          ## File Information
+
+          - **Filename**: Whisper-API-${{ env.MSI_VERSION }}.msi
+          - **Size**: ${{ env.MSI_SIZE }} MB
+          - **SHA256**: ${{ env.MSI_HASH }}
+
+          ## System Requirements
+
+          - Windows 10 Build 14393+ or Windows 11
+          - Administrator privileges
+          - Internet connection (for downloads)
+          - 15+ GB free disk space
+          - Optional: NVIDIA GPU with compute capability 7.5+ for CUDA support (PyTorch 2.9)
+
+          ## Features
+
+          ✅ Automatic Python 3.13 installation
+          ✅ Intelligent GPU detection
+          ✅ Automatic CUDA 13.0 installation (for modern GPUs)
+          ✅ Interactive model selection (tiny, base, small, medium, large, turbo)
+          ✅ Port validation
+          ✅ Windows Service integration
+          ✅ Comprehensive logging
+
+          ## Quick Start
+
+          After installation, access the API at:
+          \`\`\`
+          http://127.0.0.1:4444
+          \`\`\`
+
+          Full documentation available in the installed directory or see [README.md](https://github.com/dnias/whisper-api/blob/main/README.md)
+
+          ## Changes in this Release
+
+          - Initial release with professional MSI installer
+          - Full Windows Service integration
+          - GPU-aware CUDA installation
+          - Interactive setup wizard
+
+          ## Support
+
+          For issues or questions, see the [README.md](https://github.com/dnias/whisper-api/blob/main/README.md) documentation.
+          "@
+
+          $releaseNotes | Out-File -FilePath "RELEASE_NOTES.md" -Encoding UTF8
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: Release-Notes
+          path: RELEASE_NOTES.md
+          retention-days: 30
+
+  # ============================================================================
+  # Create GitHub Release (only on tag push)
+  # ============================================================================
+  create-release:
+    name: Create GitHub Release
+    runs-on: windows-latest
+    needs: build-msi
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download MSI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Whisper-API-${{ needs.build-msi.outputs.msi_version }}-MSI
+          path: ./
+
+      - name: Extract version from tag
+        shell: powershell
+        run: |
+          $version = $env:GITHUB_REF -replace 'refs/tags/v', ''
+          echo "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Whisper-API-*.msi
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            # Whisper API ${{ env.RELEASE_VERSION }}
+
+            ## Installation
+
+            Download `Whisper-API-${{ env.RELEASE_VERSION }}.msi` and double-click to install.
+
+            ## Features
+
+            - ✅ Professional Windows MSI Installer
+            - ✅ Automatic Python 3.13 installation
+            - ✅ Intelligent NVIDIA GPU detection
+            - ✅ CUDA 13.0 automatic installation (for modern GPUs)
+            - ✅ Interactive Whisper model selection
+            - ✅ Port validation and configuration
+            - ✅ Windows Service auto-start
+            - ✅ Comprehensive logging
+
+            ## System Requirements
+
+            - Windows 10 Build 14393+ or Windows 11
+            - Administrator privileges
+            - Internet connection (for dependencies)
+            - 15+ GB free disk space
+            - Optional: NVIDIA GPU (compute capability 7.5+)
+
+            ## Documentation
+
+            - [Quick Start](https://github.com/${{ github.repository }}/blob/main/QUICKSTART.md)
+            - [Full Documentation](https://github.com/${{ github.repository }}/blob/main/README.md)
+            - [MSI Build Guide](https://github.com/${{ github.repository }}/blob/main/MSI-BUILD-GUIDE.md)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================================
+  # Build Status Summary
+  # ============================================================================
+  build-summary:
+    name: Build Summary
+    runs-on: windows-latest
+    needs: [validate-scripts, build-msi]
+    if: always()
+    steps:
+      - name: Check build status
+        shell: powershell
+        run: |
+          Write-Host "================================" -ForegroundColor Cyan
+          Write-Host "Build Status Summary" -ForegroundColor Cyan
+          Write-Host "================================" -ForegroundColor Cyan
+
+          $validateStatus = "${{ needs.validate-scripts.result }}"
+          $buildStatus = "${{ needs.build-msi.result }}"
+
+          $validateColor = if($validateStatus -eq "success") { "Green" } else { "Red" }
+          $buildColor = if($buildStatus -eq "success") { "Green" } else { "Red" }
+
+          Write-Host ""
+          Write-Host "Script Validation: $validateStatus" -ForegroundColor $validateColor
+          Write-Host "MSI Build:         $buildStatus" -ForegroundColor $buildColor
+          Write-Host ""
+
+          if ($validateStatus -eq "success" -and $buildStatus -eq "success") {
+            Write-Host "[OK] All checks passed!" -ForegroundColor Green
+            Write-Host "MSI artifact available for download" -ForegroundColor Green
+            exit 0
+          } else {
+            Write-Host "[ERROR] Build failed!" -ForegroundColor Red
+            exit 1
+          }

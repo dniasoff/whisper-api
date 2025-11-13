@@ -1,0 +1,77 @@
+{
+  "service": {
+    "name": "whisper-api",
+    "displayName": "Whisper API Server",
+    "description": "OpenAI Whisper API compatible transcription service",
+    "startupType": "Automatic",
+    "runAs": "LocalSystem"
+  },
+  "installation": {
+    "path": "C:\\Program Files\\Whisper Api",
+    "pythonVersion": "3.13.x",
+    "venvPath": "C:\\Program Files\\Whisper Api\\.venv",
+    "logsPath": "C:\\Program Files\\Whisper Api\\logs"
+  },
+  "api": {
+    "host": "127.0.0.1",
+    "port": 4444,
+    "workers": 1,
+    "reloadDisabled": true
+  },
+  "cuda": {
+    "version": "13.0",
+    "minComputeCapability": 5.0,
+    "unsupportedGpus": [
+      "NVIDIA GeForce 600 Series",
+      "NVIDIA GeForce 700 Series",
+      "NVIDIA Quadro K series",
+      "NVIDIA Quadro P1000",
+      "NVIDIA Quadro P2000"
+    ]
+  },
+  "whisper": {
+    "models": {
+      "tiny": {
+        "parameters": "39M",
+        "vram": "~1GB",
+        "speedMultiplier": "~10x"
+      },
+      "base": {
+        "parameters": "74M",
+        "vram": "~1GB",
+        "speedMultiplier": "~7x"
+      },
+      "small": {
+        "parameters": "244M",
+        "vram": "~2GB",
+        "speedMultiplier": "~4x"
+      },
+      "medium": {
+        "parameters": "769M",
+        "vram": "~5GB",
+        "speedMultiplier": "~2x"
+      },
+      "large": {
+        "parameters": "1550M",
+        "vram": "~10GB",
+        "speedMultiplier": "~1x"
+      },
+      "turbo": {
+        "parameters": "809M",
+        "vram": "~6GB",
+        "speedMultiplier": "~8x"
+      }
+    }
+  },
+  "environmentVariables": {
+    "WHISPER_MODEL": "small",
+    "CUDA_DEVICE_ID": "0",
+    "CHUNK_LENGTH": "15",
+    "VAD_FILTER": "true"
+  },
+  "endpoints": {
+    "health": "GET /v1/health",
+    "transcribe": "POST /v1/audio/transcriptions",
+    "transcribeAlias": "POST /transcribe"
+  }
+}

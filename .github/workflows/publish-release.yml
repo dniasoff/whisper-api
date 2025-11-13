@@ -1,0 +1,207 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    name: Publish to GitHub Releases
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        shell: powershell
+        run: |
+          $tag = $env:GITHUB_REF -replace 'refs/tags/', ''
+          $version = $tag -replace '^v', ''
+
+          # Validate version format
+          if ($version -notmatch '^\d+\.\d+\.\d+') {
+            Write-Host "Invalid version format: $version" -ForegroundColor Red
+            exit 1
+          }
+
+          # Ensure X.Y.Z.W format
+          $parts = $version -split '\.'
+          while ($parts.Count -lt 4) {
+            $parts += "0"
+          }
+          $version = $parts[0..3] -join '.'
+
+          Write-Host "Release Version: $version" -ForegroundColor Cyan
+          echo "RELEASE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Set PowerShell execution policy
+        shell: powershell
+        run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+
+      - name: Download and install WiX Toolset
+        shell: powershell
+        run: |
+          Write-Host "Installing WiX Toolset 3.14..." -ForegroundColor Cyan
+          $wixUrl = "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314.exe"
+          $wixInstaller = "$env:TEMP\wix314.exe"
+
+          Invoke-WebRequest -Uri $wixUrl -OutFile $wixInstaller -ErrorAction Stop
+          & $wixInstaller /install /quiet /norestart | Out-Null
+          Start-Sleep -Seconds 5
+
+          $wixPath = "C:\Program Files (x86)\WiX Toolset v3.14\bin\candle.exe"
+          if (Test-Path $wixPath) {
+            Write-Host "[OK] WiX Toolset installed" -ForegroundColor Green
+          } else {
+            Write-Host "[ERROR] WiX installation failed" -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Build MSI
+        shell: powershell
+        run: |
+          Write-Host "Building MSI ${{ env.RELEASE_VERSION }}..." -ForegroundColor Cyan
+          cd wix
+          .\build-msi.ps1 -OutputDir "..\dist" -Version "${{ env.RELEASE_VERSION }}" -WixPath "C:\Program Files (x86)\WiX Toolset v3.14"
+
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Build failed!" -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Get MSI information
+        shell: powershell
+        run: |
+          $msiPath = "dist\Whisper-API-${{ env.RELEASE_VERSION }}.msi"
+
+          if (-not (Test-Path $msiPath)) {
+            Write-Host "MSI not found!" -ForegroundColor Red
+            exit 1
+          }
+
+          $fileSize = (Get-Item $msiPath).Length / 1MB
+          $fileHash = (Get-FileHash -Path $msiPath -Algorithm SHA256).Hash
+
+          Write-Host "[OK] MSI Ready:" -ForegroundColor Green
+          Write-Host "  Size: $($fileSize.ToString('F2')) MB"
+          Write-Host "  SHA256: $fileHash"
+
+          echo "MSI_SIZE=$($fileSize.ToString('F2'))" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "MSI_HASH=$fileHash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Generate changelog
+        shell: powershell
+        run: |
+          # Get commits since last tag
+          $lastTag = git describe --tags --abbrev=0 2>$null | Select-Object -First 1
+          $commits = if ($lastTag) {
+            git log "$lastTag..HEAD" --pretty=format:"- %s (%h)" --no-merges
+          } else {
+            git log --pretty=format:"- %s (%h)" --no-merges | Select-Object -First 20
+          }
+
+          $changelog = @"
+          ## 📦 Downloads
+
+          - **Whisper-API-${{ env.RELEASE_VERSION }}.msi** (${{ env.MSI_SIZE }} MB)
+          - SHA256: \`${{ env.MSI_HASH }}\`
+
+          ## 🚀 Installation
+
+          1. Download the MSI file
+          2. Double-click to run Windows Installer
+          3. Follow the installation wizard
+          4. Click "Install Whisper API" in Start Menu
+          5. Select your model, port, and CUDA preference
+          6. Service starts automatically
+
+          ## ✨ Features
+
+          - Professional Windows MSI installer
+          - Automatic Python 3.13 installation
+          - Intelligent NVIDIA GPU detection
+          - Automatic CUDA 13.0 setup for modern GPUs
+          - Interactive model selection (tiny/base/small/medium/large/turbo)
+          - Port availability validation
+          - Windows Service with auto-start
+          - Comprehensive installation logging
+          - Easy service management tools
+          - Complete documentation included
+
+          ## 📋 System Requirements
+
+          - **OS**: Windows 10 Build 14393+ or Windows 11
+          - **RAM**: 4 GB minimum (16 GB recommended)
+          - **Disk**: 15+ GB free space
+          - **Network**: Internet connection required
+          - **GPU**: NVIDIA GPU (optional, compute capability 7.5+ for PyTorch 2.9)
+          - **Privileges**: Administrator rights required
+
+          ## 📖 Documentation
+
+          - [Quick Start Guide](https://github.com/${{ github.repository }}/blob/main/QUICKSTART.md)
+          - [Complete Documentation](https://github.com/${{ github.repository }}/blob/main/README.md)
+          - [MSI Build Guide](https://github.com/${{ github.repository }}/blob/main/MSI-BUILD-GUIDE.md)
+
+          ## 🔧 What's Included
+
+          The installer includes all necessary tools and scripts:
+          - PowerShell installation scripts
+          - GPU compatibility checker
+          - Service management utilities
+          - Complete documentation
+          - Configuration examples
+
+          **Note**: Python, CUDA, and PyTorch are downloaded during installation.
+
+          ## 📝 Recent Changes
+
+          \`\`\`
+          $commits
+          \`\`\`
+
+          ## 🆘 Support
+
+          For issues or questions:
+          1. Check [README.md](https://github.com/${{ github.repository }}/blob/main/README.md)
+          2. Review [Troubleshooting](https://github.com/${{ github.repository }}/blob/main/README.md#troubleshooting) section
+          3. Check service logs in \`C:\Program Files\Whisper Api\logs\`
+
+          ---
+
+          Built with GitHub Actions | WiX Toolset 3.14
+          "@
+
+          $changelog | Out-File -FilePath "release_body.md" -Encoding UTF8
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref }}
+          files: |
+            dist/Whisper-API-*.msi
+          draft: false
+          prerelease: false
+          body_path: release_body.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release notification
+        shell: powershell
+        run: |
+          Write-Host '================================' -ForegroundColor Green
+          Write-Host '✓ Release Published!' -ForegroundColor Green
+          Write-Host '================================' -ForegroundColor Green
+          Write-Host ''
+          Write-Host 'Version: ${{ env.RELEASE_VERSION }}' -ForegroundColor Cyan
+          Write-Host 'File: Whisper-API-${{ env.RELEASE_VERSION }}.msi' -ForegroundColor Cyan
+          Write-Host 'Size: ${{ env.MSI_SIZE }} MB' -ForegroundColor Cyan
+          Write-Host ''
+          $releaseUrl = 'https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}'
+          Write-Host ('Release URL: ' + $releaseUrl) -ForegroundColor Cyan
+          Write-Host ''

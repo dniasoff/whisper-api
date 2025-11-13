@@ -1,0 +1,263 @@
+name: Validate Pull Request
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**.ps1'
+      - '**.py'
+      - '**.wxs'
+      - '**.json'
+      - '**.txt'
+      - '.github/workflows/**'
+
+jobs:
+  syntax-validation:
+    name: Syntax Validation
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set PowerShell execution policy
+        shell: powershell
+        run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+
+      - name: Validate all PowerShell scripts
+        shell: powershell
+        run: |
+          Write-Host "Validating PowerShell scripts..." -ForegroundColor Cyan
+
+          $psScripts = @(
+            'install-whisper.ps1',
+            'uninstall-whisper.ps1',
+            'utils/check-gpu.ps1',
+            'utils/manage-service.ps1',
+            'wix/build-msi.ps1'
+          )
+
+          $validationErrors = 0
+
+          foreach ($script in $psScripts) {
+            if (-not (Test-Path $script)) {
+              Write-Host "⚠ $script not found (might be new)" -ForegroundColor Yellow
+              continue
+            }
+
+            Write-Host "Checking $script..." -ForegroundColor Gray
+
+            try {
+              $ast = [System.Management.Automation.Language.Parser]::ParseFile(
+                (Resolve-Path $script),
+                [ref]$null,
+                [ref]$null
+              )
+
+              if ($null -eq $ast) {
+                Write-Host "[ERROR] Parse error in $script" -ForegroundColor Red
+                $validationErrors++
+              } else {
+                Write-Host "[OK] $script" -ForegroundColor Green
+              }
+            } catch {
+              Write-Host "[ERROR] Error validating $script : $_" -ForegroundColor Red
+              $validationErrors++
+            }
+          }
+
+          if ($validationErrors -gt 0) {
+            Write-Host "`n[ERROR] $validationErrors script(s) failed validation" -ForegroundColor Red
+            exit 1
+          }
+
+          Write-Host "`n[OK] All scripts are valid" -ForegroundColor Green
+
+      - name: Validate JSON files
+        shell: powershell
+        run: |
+          Write-Host "Validating JSON files..." -ForegroundColor Cyan
+
+          $jsonFiles = @(
+            'config/service-config.json'
+          )
+
+          foreach ($file in $jsonFiles) {
+            if (-not (Test-Path $file)) {
+              Write-Host "⚠ $file not found" -ForegroundColor Yellow
+              continue
+            }
+
+            Write-Host "Checking $file..." -ForegroundColor Gray
+
+            try {
+              $content = Get-Content $file -Raw
+              $json = $content | ConvertFrom-Json
+              Write-Host "[OK] $file" -ForegroundColor Green
+            } catch {
+              Write-Host "[ERROR] Invalid JSON in $file : $_" -ForegroundColor Red
+              exit 1
+            }
+          }
+
+      # Batch files no longer needed - using MSI installer
+
+      - name: Check for required files
+        shell: powershell
+        run: |
+          Write-Host "Checking required files..." -ForegroundColor Cyan
+
+          $required = @(
+            'install-whisper.ps1',
+            'uninstall-whisper.ps1',
+            'server.py',
+            'whisper_service.py',
+            'README.md',
+            'QUICKSTART.md',
+            'utils/check-gpu.ps1',
+            'utils/manage-service.ps1',
+            'config/requirements.txt',
+            'config/service-config.json',
+            'wix/Product.wxs',
+            'wix/build-msi.ps1',
+            'wix/License.rtf'
+          )
+
+          $missing = @()
+
+          foreach ($file in $required) {
+            if (Test-Path $file) {
+              Write-Host "[OK] $file" -ForegroundColor Green
+            } else {
+              Write-Host "[MISSING] $file" -ForegroundColor Red
+              $missing += $file
+            }
+          }
+
+          if ($missing.Count -gt 0) {
+            Write-Host "`n[ERROR] Missing $($missing.Count) required file(s)" -ForegroundColor Red
+            exit 1
+          }
+
+      - name: Validate WiX XML
+        shell: powershell
+        run: |
+          Write-Host "Validating WiX XML..." -ForegroundColor Cyan
+
+          $wxsFile = 'wix/Product.wxs'
+
+          if (-not (Test-Path $wxsFile)) {
+            Write-Host "⚠ $wxsFile not found" -ForegroundColor Yellow
+            return
+          }
+
+          try {
+            $xml = [xml](Get-Content $wxsFile)
+
+            # Check for Product element
+            if ($null -eq $xml.Wix.Product) {
+              Write-Host "[ERROR] No Product element found in WiX file" -ForegroundColor Red
+              exit 1
+            }
+
+            # Check for required attributes
+            $product = $xml.Wix.Product
+            $requiredAttrs = @('Name', 'Version', 'Manufacturer')
+
+            foreach ($attr in $requiredAttrs) {
+              if ([string]::IsNullOrEmpty($product.$attr)) {
+                Write-Host "[ERROR] Missing attribute: $attr" -ForegroundColor Red
+                exit 1
+              }
+            }
+
+            Write-Host "Product Name: $($product.Name)" -ForegroundColor Gray
+            Write-Host "Product Version: $($product.Version)" -ForegroundColor Gray
+            Write-Host "[OK] WiX XML is valid" -ForegroundColor Green
+
+          } catch {
+            Write-Host "[ERROR] Invalid XML in $wxsFile : $_" -ForegroundColor Red
+            exit 1
+          }
+
+  file-content-check:
+    name: File Content Validation
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for common issues
+        shell: powershell
+        run: |
+          Write-Host "Checking for common issues..." -ForegroundColor Cyan
+
+          $psScripts = Get-ChildItem -Path . -Filter "*.ps1" -Recurse
+
+          foreach ($script in $psScripts) {
+            $content = Get-Content $script.FullName
+
+            # Check for write-host usage (prefer Write-Output for modules)
+            # But it's ok for main scripts
+            if ($script.Name -in @('install-whisper.ps1', 'build-msi.ps1')) {
+              # These are allowed to use Write-Host
+            }
+
+            # Check for hardcoded paths
+            $pathMatches = $content | Select-String -Pattern 'C:\\Users\\' -ErrorAction SilentlyContinue
+            if ($pathMatches) {
+              Write-Host "⚠ Possible hardcoded user path in $($script.Name)" -ForegroundColor Yellow
+            }
+          }
+
+          Write-Host "[OK] Content check complete" -ForegroundColor Green
+
+      - name: Validate documentation
+        shell: powershell
+        run: |
+          Write-Host "Validating documentation..." -ForegroundColor Cyan
+
+          $docs = @(
+            'README.md',
+            'QUICKSTART.md',
+            'MSI-BUILD-GUIDE.md'
+          )
+
+          foreach ($doc in $docs) {
+            if (Test-Path $doc) {
+              $size = (Get-Item $doc).Length
+              Write-Host "[OK] $doc ($($size / 1KB | [math]::Round(2)) KB)" -ForegroundColor Green
+            } else {
+              Write-Host "[WARNING] Missing documentation: $doc" -ForegroundColor Yellow
+            }
+          }
+
+  pr-checks-summary:
+    name: Summary
+    runs-on: windows-latest
+    needs: [syntax-validation, file-content-check]
+    if: always()
+    steps:
+      - name: Check PR validation status
+        shell: powershell
+        run: |
+          Write-Host "================================" -ForegroundColor Cyan
+          Write-Host "PR Validation Summary" -ForegroundColor Cyan
+          Write-Host "================================" -ForegroundColor Cyan
+
+          $syntaxStatus = "${{ needs.syntax-validation.result }}"
+          $contentStatus = "${{ needs.file-content-check.result }}"
+
+          Write-Host ""
+          Write-Host "Syntax Validation: $syntaxStatus" -ForegroundColor $(if($syntaxStatus -eq 'success') {'Green'} else {'Red'})
+          Write-Host "Content Validation: $contentStatus" -ForegroundColor $(if($contentStatus -eq 'success') {'Green'} else {'Red'})
+          Write-Host ""
+
+          if ($syntaxStatus -eq 'success' -and $contentStatus -eq 'success') {
+            Write-Host "[OK] All PR checks passed!" -ForegroundColor Green
+            Write-Host "Ready to merge" -ForegroundColor Green
+            exit 0
+          } else {
+            Write-Host "[ERROR] Some checks failed" -ForegroundColor Red
+            exit 1
+          }

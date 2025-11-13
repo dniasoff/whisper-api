@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(timeout:*)",
+      "FileSystem(read:*)",
+      "PowerShell(*)",
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

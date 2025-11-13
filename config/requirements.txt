@@ -1,0 +1,22 @@
+# Whisper API Requirements
+# Core dependencies for the Whisper API server
+
+# Web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+python-multipart>=0.0.6
+
+# Whisper model
+faster-whisper>=1.0.0
+
+# ML/AI dependencies (torch will be installed separately with CUDA support)
+numpy>=1.24.0
+scipy>=1.10.0
+
+# Audio processing
+librosa>=0.10.0
+soundfile>=0.12.0
+
+# Utilities
+python-dotenv>=1.0.0

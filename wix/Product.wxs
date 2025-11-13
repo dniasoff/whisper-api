@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+  <Product Id="*"
+           Name="Whisper API"
+           Language="1033"
+           Version="1.0.0.0"
+           Manufacturer="Whisper API"
+           UpgradeCode="A3B2D4E6-F1A3-4B5C-9D2E-3F4A5B6C7D8E">
+
+    <Package InstallerVersion="200"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Platform="x64"
+             Description="OpenAI Whisper API - Windows Installer"
+             Keywords="Whisper,API,Speech Recognition,Transcription" />
+
+    <MajorUpgrade
+        AllowDowngrades="no"
+        AllowSameVersionUpgrades="yes"
+        DowngradeErrorMessage="A newer version of Whisper API is already installed."
+        Schedule="afterInstallInitialize" />
+
+    <!-- Define DiskPrompt property -->
+    <Property Id="DiskPrompt" Value="Whisper API Installation Disk" />
+
+    <!-- Define license -->
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+    <!-- Note: Banner.bmp and Dialog.bmp are optional custom UI assets -->
+
+    <!-- Media -->
+    <Media Id="1" Cabinet="whisper.cab" EmbedCab="yes" DiskPrompt="Whisper API Installation Disk" />
+
+    <!-- Program Files Directory Structure -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Whisper API">
+          <Directory Id="UtilsFolder" Name="utils" />
+          <Directory Id="ConfigFolder" Name="config" />
+        </Directory>
+      </Directory>
+
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Whisper API" />
+      </Directory>
+    </Directory>
+
+    <!-- Features -->
+    <Feature Id="ProductFeature"
+             Title="Whisper API"
+             Level="1"
+             Description="OpenAI Whisper API Server for Windows">
+      <ComponentRef Id="InstallerPs1" />
+      <ComponentRef Id="UninstallerPs1" />
+      <ComponentRef Id="ServerPy" />
+      <ComponentRef Id="WhisperServicePy" />
+      <ComponentRef Id="ReadmeFile" />
+      <ComponentRef Id="QuickstartFile" />
+      <ComponentRef Id="CheckGpuScript" />
+      <ComponentRef Id="ManageServiceScript" />
+      <ComponentRef Id="RequirementsFile" />
+      <ComponentRef Id="ConfigFile" />
+      <ComponentRef Id="StartMenuShortcuts" />
+      <ComponentRef Id="UninstallShortcut" />
+      <ComponentRef Id="ProgramMenuFolderCleanup" />
+      <ComponentRef Id="RegistryEntry" />
+    </Feature>
+
+    <!-- Main Scripts in Install Folder -->
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="InstallerPs1" Guid="82B4F3D5-E6F7-5A8B-9C0D-2E3F4A5A6C7D" Win64="yes">
+        <File Id="InstallPs1" Name="install-whisper.ps1" Source="..\install-whisper.ps1" KeyPath="yes" />
+      </Component>
+
+      <Component Id="UninstallerPs1" Guid="93C5F4E6-F7A8-6B9C-0D1E-3F4A5B6A7D8E" Win64="yes">
+        <File Id="UninstallPs1" Name="uninstall-whisper.ps1" Source="..\uninstall-whisper.ps1" />
+      </Component>
+
+      <Component Id="ServerPy" Guid="C4D5E6F7-A8B9-0C1D-2E3F-4A5B6C7D8E9F" Win64="yes">
+        <File Id="ServerPy" Name="server.py" Source="..\server.py" />
+      </Component>
+
+      <Component Id="WhisperServicePy" Guid="D5E6F7A8-B9C0-1D2E-3F4A-5B6C7D8E9F0A" Win64="yes">
+        <File Id="WhisperServicePy" Name="whisper_service.py" Source="..\whisper_service.py" />
+      </Component>
+
+      <Component Id="ReadmeFile" Guid="A4D6F7A8-B8C9-7D0E-1E2F-4A5B6C7A8E9F" Win64="yes">
+        <File Id="ReadmeMd" Name="README.md" Source="..\README.md" />
+      </Component>
+
+      <Component Id="QuickstartFile" Guid="B5E7A8B9-C9D0-8E1F-2F3A-5B6C7D8A9F0E" Win64="yes">
+        <File Id="QuickstartMd" Name="QUICKSTART.md" Source="..\QUICKSTART.md" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Utils Scripts -->
+    <DirectoryRef Id="UtilsFolder">
+      <Component Id="CheckGpuScript" Guid="C6F8A9B0-C0D1-9E2F-3A4B-6C7D8E9A0B1C" Win64="yes">
+        <File Id="CheckGpu" Name="check-gpu.ps1" Source="..\utils\check-gpu.ps1" />
+      </Component>
+
+      <Component Id="ManageServiceScript" Guid="D7A9B0C1-D1E2-0F3A-4B5C-7D8E9F0A1B2C" Win64="yes">
+        <File Id="ManageService" Name="manage-service.ps1" Source="..\utils\manage-service.ps1" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Config Files -->
+    <DirectoryRef Id="ConfigFolder">
+      <Component Id="RequirementsFile" Guid="E8B0C1D2-E2F3-1A4B-5C6D-8E9F0A1B2C3D" Win64="yes">
+        <File Id="Requirements" Name="requirements.txt" Source="..\config\requirements.txt" />
+      </Component>
+
+      <Component Id="ConfigFile" Guid="F9C1D2E3-F3A4-2B5C-6D7E-9F0A1B2C3D4E" Win64="yes">
+        <File Id="ServiceConfig" Name="service-config.json" Source="..\config\service-config.json" />
+      </Component>
+    </DirectoryRef>
+
+    <!-- Start Menu Shortcuts -->
+    <DirectoryRef Id="ApplicationProgramsFolder">
+      <Component Id="StartMenuShortcuts" Guid="0AB2C3D4-E4F5-3A6B-7C8D-0E1F2A3B4C5D">
+        <Shortcut Id="InstallShortcut"
+                  Name="Install Whisper API"
+                  Target="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe"
+                  Arguments="-ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]install-whisper.ps1&quot;"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <Shortcut Id="QuickstartShortcut"
+                  Name="Quick Start Guide"
+                  Target="[INSTALLFOLDER]QUICKSTART.md"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <Shortcut Id="ManageShortcut"
+                  Name="Manage Service"
+                  Target="powershell.exe"
+                  Arguments="-ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]utils\manage-service.ps1&quot;"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <Shortcut Id="CheckGpuShortcut"
+                  Name="Check GPU Compatibility"
+                  Target="powershell.exe"
+                  Arguments="-ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]utils\check-gpu.ps1&quot;"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU" Key="Software\Whisper API" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+
+      <Component Id="UninstallShortcut" Guid="1BC3D4E5-F5A6-4B7C-8D9E-1F2A3B4C5D6E">
+        <Shortcut Id="UninstallShortcut"
+                  Name="Uninstall Whisper API"
+                  Target="[SystemFolder]msiexec.exe"
+                  Arguments="/x [ProductCode]"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKCU" Key="Software\Whisper API" Name="uninstall" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+
+      <Component Id="ProgramMenuFolderCleanup" Guid="4EF6A7B8-C7D8-6D9E-0F1A-3B4C5D6E7F8A">
+        <RegistryValue Root="HKCU" Key="Software\Whisper API" Name="menufolder" Type="integer" Value="1" KeyPath="yes" />
+        <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+      </Component>
+
+    </DirectoryRef>
+
+    <!-- Registry Entries -->
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="RegistryEntry" Guid="2CD4E5F6-A6B7-5C8D-9E0F-2A3B4C5D6E7F" Win64="yes">
+        <RegistryKey Root="HKLM" Key="Software\Whisper API">
+          <RegistryValue Type="string" Name="InstallPath" Value="[INSTALLFOLDER]" />
+          <RegistryValue Type="string" Name="Version" Value="1.0.0" />
+          <RegistryValue Type="string" Name="DisplayName" Value="Whisper API" />
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+
+    <!-- CustomAction to run the PowerShell installer during MSI installation -->
+    <CustomAction Id="LaunchInstaller"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]install-whisper.ps1&quot;"
+                  Execute="deferred"
+                  Return="asyncWait"
+                  Impersonate="no" />
+
+    <!-- CustomAction to run the PowerShell uninstaller during MSI uninstallation -->
+    <CustomAction Id="LaunchUninstaller"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="[SystemFolder]WindowsPowerShell\v1.0\powershell.exe -ExecutionPolicy Bypass -Command &quot;&amp; '[INSTALLFOLDER]uninstall-whisper.ps1' -InstallPath '[INSTALLFOLDER]'&quot;"
+                  Execute="deferred"
+                  Return="ignore"
+                  Impersonate="no" />
+
+    <InstallExecuteSequence>
+      <Custom Action="LaunchInstaller" After="InstallFiles">NOT Installed</Custom>
+      <Custom Action="LaunchUninstaller" Before="RemoveFiles">Installed AND NOT REINSTALL AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+
+    <!-- UI -->
+    <UIRef Id="WixUI_Minimal" />
+
+  </Product>
+</Wix>
