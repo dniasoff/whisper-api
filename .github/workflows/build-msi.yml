@@ -285,13 +285,13 @@ jobs:
 
           ## Features
 
-          ✅ Automatic Python 3.13 installation
-          ✅ Intelligent GPU detection
-          ✅ Automatic CUDA 13.0 installation (for modern GPUs)
-          ✅ Interactive model selection (tiny, base, small, medium, large, turbo)
-          ✅ Port validation
-          ✅ Windows Service integration
-          ✅ Comprehensive logging
+          - Automatic Python 3.13 installation
+          - Intelligent GPU detection
+          - Automatic CUDA 13.0 installation (for modern GPUs)
+          - Interactive model selection (tiny, base, small, medium, large, turbo)
+          - Port validation
+          - Windows Service integration
+          - Comprehensive logging
 
           ## Quick Start
 
@@ -398,14 +398,14 @@ jobs:
 
             ## Features
 
-            - ✅ Professional Windows MSI Installer
-            - ✅ Automatic Python 3.13 installation
-            - ✅ Intelligent NVIDIA GPU detection
-            - ✅ CUDA 13.0 automatic installation (for modern GPUs)
-            - ✅ Interactive Whisper model selection
-            - ✅ Port validation and configuration
-            - ✅ Windows Service auto-start
-            - ✅ Comprehensive logging
+            - Professional Windows MSI Installer
+            - Automatic Python 3.13 installation
+            - Intelligent NVIDIA GPU detection
+            - CUDA 13.0 automatic installation (for modern GPUs)
+            - Interactive Whisper model selection
+            - Port validation and configuration
+            - Windows Service auto-start
+            - Comprehensive logging
 
             ## System Requirements
 

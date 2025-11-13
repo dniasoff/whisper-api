@@ -110,12 +110,12 @@ jobs:
           }
 
           $changelog = @"
-          ## 📦 Downloads
+          ## Downloads
 
           - **Whisper-API-${{ env.RELEASE_VERSION }}.msi** (${{ env.MSI_SIZE }} MB)
           - SHA256: \`${{ env.MSI_HASH }}\`
 
-          ## 🚀 Installation
+          ## Installation
 
           1. Download the MSI file
           2. Double-click to run Windows Installer
@@ -124,7 +124,7 @@ jobs:
           5. Select your model, port, and CUDA preference
           6. Service starts automatically
 
-          ## ✨ Features
+          ## Features
 
           - Professional Windows MSI installer
           - Automatic Python 3.13 installation
@@ -137,7 +137,7 @@ jobs:
           - Easy service management tools
           - Complete documentation included
 
-          ## 📋 System Requirements
+          ## System Requirements
 
           - **OS**: Windows 10 Build 14393+ or Windows 11
           - **RAM**: 4 GB minimum (16 GB recommended)
@@ -146,13 +146,13 @@ jobs:
           - **GPU**: NVIDIA GPU (optional, compute capability 7.5+ for PyTorch 2.9)
           - **Privileges**: Administrator rights required
 
-          ## 📖 Documentation
+          ## Documentation
 
           - [Quick Start Guide](https://github.com/${{ github.repository }}/blob/main/QUICKSTART.md)
           - [Complete Documentation](https://github.com/${{ github.repository }}/blob/main/README.md)
           - [MSI Build Guide](https://github.com/${{ github.repository }}/blob/main/MSI-BUILD-GUIDE.md)
 
-          ## 🔧 What's Included
+          ## What's Included
 
           The installer includes all necessary tools and scripts:
           - PowerShell installation scripts
@@ -163,13 +163,13 @@ jobs:
 
           **Note**: Python, CUDA, and PyTorch are downloaded during installation.
 
-          ## 📝 Recent Changes
+          ## Recent Changes
 
           \`\`\`
           $commits
           \`\`\`
 
-          ## 🆘 Support
+          ## Support
 
           For issues or questions:
           1. Check [README.md](https://github.com/${{ github.repository }}/blob/main/README.md)
