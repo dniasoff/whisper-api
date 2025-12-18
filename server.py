@@ -34,21 +34,21 @@ DEVICE = "cpu"
 COMPUTE_TYPE = "int8"
 
 # Use print to ensure logs appear during module import (before uvicorn captures logging)
-print("="*60)
-print("Whisper API Server - GPU Detection")
-print("="*60)
+print("="*60, flush=True)
+print("Whisper API Server - GPU Detection", flush=True)
+print("="*60, flush=True)
 
 if torch.cuda.is_available():
-    print("✓ CUDA is available on this system")
+    print("[OK] CUDA is available on this system", flush=True)
     try:
         capability = torch.cuda.get_device_capability(0)
         compute_cap = float(f"{capability[0]}.{capability[1]}")
         gpu_name = torch.cuda.get_device_name(0)
 
-        print(f"GPU Name: {gpu_name}")
-        print(f"GPU Compute Capability: sm_{capability[0]}{capability[1]} ({compute_cap})")
-        print(f"CUDA Toolkit Version: {torch.version.cuda}")
-        print(f"PyTorch Version: {torch.__version__}")
+        print(f"GPU Name: {gpu_name}", flush=True)
+        print(f"GPU Compute Capability: sm_{capability[0]}{capability[1]} ({compute_cap})", flush=True)
+        print(f"CUDA Toolkit Version: {torch.version.cuda}", flush=True)
+        print(f"PyTorch Version: {torch.__version__}", flush=True)
 
         # Check PyTorch compatibility
         # PyTorch 2.9+ requires compute capability >= 7.5 (sm_75)
@@ -58,7 +58,7 @@ if torch.cuda.is_available():
         print(f"PyTorch Minimum Required: sm_75 (7.5+)")
 
         if compute_cap < pytorch_min_capability:
-            print(f"✗ GPU INCOMPATIBLE: Your GPU (sm_{capability[0]}{capability[1]}) is below PyTorch minimum (sm_75)")
+            print(f"[X] GPU INCOMPATIBLE: Your GPU (sm_{capability[0]}{capability[1]}) is below PyTorch minimum (sm_75)")
             print(f"   Explanation: PyTorch {torch.__version__} dropped support for older GPUs")
             print(f"   - Your GPU: Compute Capability {compute_cap} (Pascal/Maxwell architecture)")
             print(f"   - Required: Compute Capability 7.5+ (Turing/Volta/Ampere/Ada/Hopper)")
@@ -71,19 +71,19 @@ if torch.cuda.is_available():
             # GPU is compatible, enable CUDA
             DEVICE = "cuda"
             COMPUTE_TYPE = "float16"
-            print(f"✓ GPU COMPATIBLE: Compute capability {compute_cap} meets PyTorch requirement (7.5+)")
-            print(f"✓ CUDA ACCELERATION ENABLED")
+            print(f"[OK] GPU COMPATIBLE: Compute capability {compute_cap} meets PyTorch requirement (7.5+)")
+            print(f"[OK] CUDA ACCELERATION ENABLED")
             print(f"Final Device: CUDA (GPU acceleration active with float16 precision)")
         else:
-            print(f"✗ GPU TOO OLD: Compute capability {compute_cap} < 5.0")
+            print(f"[X] GPU TOO OLD: Compute capability {compute_cap} < 5.0")
             print(f"   This GPU is from pre-2014 era and is not supported by any modern CUDA toolkit.")
             print(f"Final Device: CPU (GPU too old)")
 
     except Exception as e:
-        print(f"✗ Could not get GPU information: {e}")
+        print(f"[X] Could not get GPU information: {e}")
         print(f"Final Device: CPU (GPU detection failed)")
 else:
-    print("✗ CUDA is NOT available on this system")
+    print("[X] CUDA is NOT available on this system")
     print("   Possible reasons:")
     print("   - No NVIDIA GPU detected")
     print("   - NVIDIA drivers not installed")
@@ -125,7 +125,7 @@ try:
         compute_type=COMPUTE_TYPE,
         num_workers=1,
     )
-    logger.info(f"✓ Model loaded successfully: {MODEL_SIZE} on {DEVICE} with {COMPUTE_TYPE}")
+    logger.info(f"[OK] Model loaded successfully: {MODEL_SIZE} on {DEVICE} with {COMPUTE_TYPE}")
 except Exception as e:
     # Fall back to CPU if CUDA fails
     if DEVICE == "cuda":
@@ -140,7 +140,7 @@ except Exception as e:
             compute_type=COMPUTE_TYPE,
             num_workers=1,
         )
-        logger.info(f"✓ Model loaded successfully: {MODEL_SIZE} on CPU with int8")
+        logger.info(f"[OK] Model loaded successfully: {MODEL_SIZE} on CPU with int8")
     else:
         logger.error(f"Failed to load model: {e}")
         raise
@@ -266,11 +266,11 @@ async def warmup():
             logger.info(f"PyTorch Minimum Required: sm_75 (7.5+)")
 
             if DEVICE == "cuda":
-                logger.info("✓ CUDA ACCELERATION ENABLED")
+                logger.info("[OK] CUDA ACCELERATION ENABLED")
                 logger.info(f"   GPU is compatible and will be used for acceleration")
             else:
                 # CUDA is available but not being used - explain why
-                logger.warning("✗ CUDA DISABLED - GPU Not Compatible")
+                logger.warning("[X] CUDA DISABLED - GPU Not Compatible")
                 logger.warning(f"   Your GPU: {gpu_name} with compute capability {compute_cap} (sm_{capability[0]}{capability[1]})")
                 logger.warning(f"   PyTorch {torch.__version__} requires: Compute capability 7.5+ (sm_75+)")
                 logger.warning(f"")
@@ -353,4 +353,9 @@ async def warmup():
                 pass
 
 if __name__ == "__main__":
+    # Add script directory to Python path for module import
+    import sys
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if script_dir not in sys.path:
+        sys.path.insert(0, script_dir)
     uvicorn.run("server:app", host=HOST, port=PORT, reload=False, workers=1)
